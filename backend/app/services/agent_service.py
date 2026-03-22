@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from typing import List, Tuple
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -11,7 +12,11 @@ from app.schemas.models import (
 from app.core.validator import validate_plan  # <-- usamos el validador desde aquí
 
 load_dotenv()
-client = OpenAI()
+logger = logging.getLogger(__name__)
+
+
+def get_client() -> OpenAI:
+    return OpenAI()
 
 def build_agent_instructions() -> str:
     return (
@@ -44,7 +49,7 @@ def compact_pool(pool: List[Exercise]) -> List[dict]:
     ]
 
 def _call_model_for_plan(*, model: str, system_prompt: str, user_content: str) -> PlanDraft:
-    resp = client.responses.create(
+    resp = get_client().responses.create(
         model=model,
         input=[
             {"role": "system", "content": system_prompt},
@@ -70,6 +75,8 @@ def generate_plan_draft(
     blueprint: Blueprint,
     exercise_pool: List[Exercise],
     model: str | None = None,
+    iteration_feedback: str | None = None,
+    iteration_feedback_notes: List[str] | None = None,
 ) -> PlanDraft:
     model = model or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
@@ -83,6 +90,10 @@ def generate_plan_draft(
         "output_requirements": {
             "status": "DRAFT",
             "sessions_per_week": blueprint.sessions_per_week,
+        },
+        "iteration_feedback": {
+            "user_message": iteration_feedback or "",
+            "applied_notes": iteration_feedback_notes or [],
         },
     }
 
@@ -101,6 +112,8 @@ def generate_plan_draft_with_repair(
     exercise_pool: List[Exercise],
     model: str | None = None,
     max_attempts: int = 3,
+    iteration_feedback: str | None = None,
+    iteration_feedback_notes: List[str] | None = None,
 ) -> Tuple[PlanDraft, List[str]]:
     """
     Generates a PlanDraft and self-repairs using validator feedback.
@@ -120,10 +133,16 @@ def generate_plan_draft_with_repair(
         blueprint=blueprint,
         exercise_pool=exercise_pool,
         model=model,
+        iteration_feedback=iteration_feedback,
+        iteration_feedback_notes=iteration_feedback_notes,
     )
 
     ok, errors = validate_plan(plan, constraints, blueprint, exercise_pool)
     if ok:
+        logger.info(
+            "plan_generation_succeeded",
+            extra={"plan_id": plan_id, "version": version, "attempts": 1, "model": model},
+        )
         return plan, []
 
     # 2) Repair attempts
@@ -137,6 +156,10 @@ def generate_plan_draft_with_repair(
         "output_requirements": {
             "status": "DRAFT",
             "sessions_per_week": blueprint.sessions_per_week,
+        },
+        "iteration_feedback": {
+            "user_message": iteration_feedback or "",
+            "applied_notes": iteration_feedback_notes or [],
         },
     }
 
@@ -161,9 +184,23 @@ def generate_plan_draft_with_repair(
 
         ok, errors = validate_plan(plan, constraints, blueprint, exercise_pool)
         if ok:
+            logger.info(
+                "plan_generation_repaired",
+                extra={"plan_id": plan_id, "version": version, "attempts": attempt, "model": model},
+            )
             return plan, []
 
         attempt += 1
 
     # If still failing, return last plan and last errors
+    logger.warning(
+        "plan_generation_failed",
+        extra={
+            "plan_id": plan_id,
+            "version": version,
+            "attempts": max_attempts,
+            "model": model,
+            "errors": errors,
+        },
+    )
     return plan, errors

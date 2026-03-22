@@ -1,0 +1,33 @@
+FUNCTION normalize_profile(UserProfileRaw raw) -> UserProfileNormalized:
+  n.age = clamp(raw.age, 10, 100)
+  n.sex = raw.sex
+  n.weight_kg = raw.weight_kg
+  n.height_cm = raw.height_cm
+
+  n.activity_level = map_activity(raw.activity_level_choice, raw.activity_history_text)
+  n.training_experience = infer_experience(n.activity_level, raw.activity_history_text)
+
+  n.injury_tags = extract_injury_tags(raw.injuries_text)
+  n.medical_tags = extract_medical_tags(raw.medical_flags)
+
+  n.time_per_session_min = clamp(raw.time_per_session_min, 10, 120)
+  n.environment = infer_environment(raw.equipment_available)
+  n.equipment_tags = map_equipment(raw.equipment_available)
+
+  n.goal_primary = raw.goal_primary
+
+  // define range for days/week based on preference + safety
+  n.days_per_week_target_range = compute_days_range(raw.days_per_week_preferred, n.activity_level, n.age)
+
+  n.risk_level = compute_risk_level(n.age, n.medical_tags, n.activity_level, n.injury_tags)
+
+  RETURN n
+
+
+FUNCTION classify_user(UserProfileNormalized n) -> segment:
+  IF n.age >= 40 AND n.training_experience == beginner AND n.activity_level in {sedentary, low}:
+    RETURN "40plus_beginner_low"
+  IF n.age >= 40 AND n.training_experience == intermediate:
+    RETURN "40plus_intermediate"
+  ELSE:
+    RETURN "general"

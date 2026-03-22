@@ -1,0 +1,5 @@
+POST /intake
+POST /plan/draft
+POST /plan/iterate
+POST /plan/finalize
+GET  /plan/{plan_id}

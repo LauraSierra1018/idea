@@ -1,0 +1,37 @@
+FUNCTION POST /plan/iterate(user_id, plan_id, user_message):
+  ctx = load_planning_context(user_id)
+  current_plan = load_plan(plan_id)
+
+  // 1) Extract structured preferences/requests from message
+  parsed = LLM_parse_user_request({
+    message: user_message,
+    allowed_soft_constraints: ctx.constraints.soft,
+    hard_constraints: ctx.constraints.hard
+  })
+  // parsed could be: requested_days=2, dislikes=["running"], wants=["home only"]
+
+  // 2) Apply only allowed changes
+  proposed_changes = compute_plan_changes(parsed, current_plan, ctx)
+
+  // 3) Validate again
+  candidate_plan = apply_changes(current_plan, proposed_changes)
+
+  validation = validate_plan(candidate_plan, ctx.constraints, ctx.blueprint)
+  IF validation.ok == false:
+    // propose alternative options within constraints
+    options = generate_options_within_constraints(parsed, current_plan, ctx)
+    RETURN {
+      status: "NEEDS_DECISION",
+      message: "I can do A/B/C within your limits",
+      options: options,
+      blocked_by: validation.errors
+    }
+
+  // 4) Persist new version
+  new_version = current_plan.version + 1
+  save_plan(user_id, candidate_plan, status="DRAFT", version=new_version)
+  save_change_log(plan_id, from=current_plan.version, to=new_version, changes=proposed_changes)
+
+  // 5) Return updated plan + minimal next questions if needed
+  questions = compute_remaining_questions(candidate_plan, ctx)
+  RETURN {status: "UPDATED", plan: candidate_plan, questions_to_finalize: questions}

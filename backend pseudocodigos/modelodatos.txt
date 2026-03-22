@@ -1,0 +1,80 @@
+STRUCT UserProfileRaw:
+  age
+  sex
+  weight_kg
+  height_cm
+  activity_history_text
+  activity_level_choice
+  injuries_text
+  medical_flags (checkboxes)
+  time_per_session_min
+  days_per_week_preferred
+  equipment_available
+  goal_primary
+  food_preferences (optional)
+  constraints_preferences (optional)
+
+STRUCT UserProfileNormalized:
+  age
+  sex
+  weight_kg
+  height_cm
+  bmi (optional)
+  activity_level {sedentary, low, medium, high}
+  training_experience {beginner, intermediate}
+  injury_tags[]        // e.g., knee_pain, low_back_pain
+  medical_tags[]       // e.g., hypertension, diabetes, none
+  time_per_session_min
+  days_per_week_target_range [min,max]
+  environment {home, gym, mixed}
+  equipment_tags[]
+  goal_primary
+  risk_level {low, medium, high}
+
+STRUCT Constraints:
+  hard:
+    max_sessions_per_week
+    max_intensity_rpe
+    min_rest_days_per_week
+    forbidden_exercise_tags[]
+    required_components[]    // e.g., mobility, warmup
+    progression_caps         // rules for weekly progression
+  soft:
+    preferred_session_types[]
+    disliked_exercise_tags[]
+    schedule_preferences
+    dietary_preferences (optional)
+
+STRUCT Blueprint:
+  weeks_horizon (e.g., 2 or 4)
+  sessions_per_week
+  session_duration_min
+  session_templates[] // list of templates (A,B,C...) with goals
+  intensity_target_rpe_range
+  cardio_target_zone (optional)
+  progression_plan_outline
+
+STRUCT Exercise:
+  id
+  name
+  equipment_tags[]
+  difficulty
+  impact_level
+  contraindication_tags[]
+  muscle_groups[]
+  modality {strength, cardio, mobility}
+  alternatives_ids[]
+
+STRUCT PlanDraft:
+  plan_id
+  version
+  weekly_schedule[]    // days + sessions
+  sessions[]           // each with warmup/main/cooldown
+  progression_notes
+  nutrition_stub (optional)
+  rationale_summary
+  questions_to_finalize[]
+  assumptions[]
+  safety_flags[]
+
+STRUCT PlanFinal: like PlanDraft + "agreement_summary" + "change_log"

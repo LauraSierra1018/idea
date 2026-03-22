@@ -1,0 +1,27 @@
+FUNCTION POST /plan/draft(user_id):
+  ctx = load_planning_context(user_id)  // {normalized, constraints, blueprint, pool}
+
+  prompt_payload = {
+    user_profile: ctx.normalized,
+    constraints: ctx.constraints,
+    blueprint: ctx.blueprint,
+    exercise_pool: compact(ctx.pool),
+    required_output_schema: "PlanDraft JSON"
+  }
+
+  draft = LLM_generate_draft(prompt_payload)
+
+  // VALIDATION GATE (backend manda)
+  validation = validate_plan(draft, ctx.constraints, ctx.blueprint)
+  IF validation.ok == false:
+    // repair loop: send validation errors back to IA
+    draft = LLM_repair_draft(prompt_payload, validation.errors)
+
+    validation2 = validate_plan(draft, ctx.constraints, ctx.blueprint)
+    IF validation2.ok == false:
+      // final fallback: build a minimal deterministic plan without IA
+      draft = build_deterministic_fallback_plan(ctx)
+
+  plan_id = save_plan(user_id, draft, status="DRAFT", version=1)
+
+  RETURN {plan_id, draft}

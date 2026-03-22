@@ -1,0 +1,36 @@
+FUNCTION derive_constraints(UserProfileNormalized n, segment) -> Constraints:
+  c = new Constraints()
+
+  // HARD rules
+  c.hard.required_components = ["warmup", "cooldown", "mobility_baseline"]
+
+  IF n.age >= 40:
+    c.hard.max_intensity_rpe = 7
+  IF n.training_experience == beginner OR n.activity_level in {sedentary, low}:
+    c.hard.max_intensity_rpe = min(c.hard.max_intensity_rpe, 6)
+    c.hard.progression_caps = {
+      weekly_volume_increase_pct_max: 10,
+      intensity_step_max: 1,
+      deload_every_n_weeks: 4
+    }
+
+  // sessions/week limits
+  c.hard.max_sessions_per_week = n.days_per_week_target_range.max
+  c.hard.min_rest_days_per_week = max(2, 7 - c.hard.max_sessions_per_week)
+
+  // Injury-based exclusions
+  IF "knee_pain" in n.injury_tags:
+    add c.hard.forbidden_exercise_tags: ["high_impact", "deep_knee_flexion_heavy"]
+  IF "low_back_pain" in n.injury_tags:
+    add c.hard.forbidden_exercise_tags: ["spinal_loaded_heavy", "flexion_loaded"]
+
+  // Medical-based exclusions (example)
+  IF "hypertension" in n.medical_tags:
+    add c.hard.forbidden_exercise_tags: ["valsava_heavy", "max_effort_lifts"]
+
+  // SOFT preferences (negotiable)
+  c.soft.preferred_session_types = infer_preferred_types(n.goal_primary)
+  c.soft.disliked_exercise_tags = [] // from user preferences if provided
+  c.soft.schedule_preferences = raw_preference_if_exists()
+
+  RETURN c

@@ -1,0 +1,23 @@
+FUNCTION POST /plan/finalize(user_id, plan_id, user_confirmation):
+  current_plan = load_plan(plan_id)
+
+  IF user_confirmation != true:
+    RETURN {status: "NOT_FINALIZED"}
+
+  // final safety check
+  ctx = load_planning_context(user_id)
+  validation = validate_plan(current_plan, ctx.constraints, ctx.blueprint)
+  IF validation.ok == false:
+    RETURN {status: "BLOCKED", errors: validation.errors}
+
+  final_plan = current_plan
+  final_plan.status = "FINAL"
+  final_plan.agreement_summary = build_agreement_summary(final_plan, ctx)
+  final_plan.followup_rules = {
+    "if_pain_gt_6": "switch to low-impact + reduce volume 20%",
+    "if_adherence_lt_50": "simplify to 2 sessions/week",
+    "weekly_checkin": "ask 3 questions (pain, time, energy)"
+  }
+
+  save_plan(user_id, final_plan, status="FINAL", version=current_plan.version)
+  RETURN {status: "FINALIZED", plan: final_plan}

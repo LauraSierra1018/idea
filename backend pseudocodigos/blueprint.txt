@@ -1,0 +1,38 @@
+FUNCTION build_blueprint(UserProfileNormalized n, Constraints c) -> Blueprint:
+  b = new Blueprint()
+
+  b.weeks_horizon = 2
+  b.session_duration_min = choose_duration(n.time_per_session_min)
+
+  // sessions/week chosen inside target range but safe baseline
+  baseline_sessions = choose_baseline_sessions(n.activity_level, n.training_experience, n.age)
+  b.sessions_per_week = clamp(baseline_sessions, n.days_per_week_target_range.min, n.days_per_week_target_range.max)
+
+  b.intensity_target_rpe_range = [4, c.hard.max_intensity_rpe]
+
+  // templates
+  IF n.goal_primary in {"fat_loss", "recomposition"}:
+    b.session_templates = [
+      template("A", goal="strength_full_body", focus="movement_patterns"),
+      template("B", goal="cardio_zone2_mobility", focus="aerobic_base"),
+      template("C", goal="strength_core_balance", focus="stability")
+    ]
+  ELSE IF n.goal_primary == "muscle_gain":
+    b.session_templates = [
+      template("A", goal="strength_full_body"),
+      template("B", goal="strength_upper"),
+      template("C", goal="strength_lower+mobility")
+    ]
+  ELSE:
+    b.session_templates = [
+      template("A", goal="mobility+strength_light"),
+      template("B", goal="cardio_zone2"),
+      template("C", goal="strength_light+balance")
+    ]
+
+  b.progression_plan_outline = {
+    rule: "If adherence >= 80% and soreness <= moderate, then +1 set total OR +5 min cardio next week",
+    else: "Maintain or reduce volume"
+  }
+
+  RETURN b

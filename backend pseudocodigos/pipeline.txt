@@ -1,0 +1,16 @@
+FUNCTION POST /intake(user_id, UserProfileRaw raw):
+  normalized = normalize_profile(raw)
+  segment = classify_user(normalized)                      // e.g., "40plus_beginner_low_activity"
+  constraints = derive_constraints(normalized, segment)
+  blueprint = build_blueprint(normalized, constraints)
+  exercise_pool = filter_exercises(constraints, normalized)
+
+  save_user_profile(user_id, raw, normalized, segment)
+  save_planning_context(user_id, constraints, blueprint, exercise_pool)
+
+  RETURN {
+    user_profile: normalized,
+    constraints: constraints,
+    blueprint: blueprint,
+    exercise_pool_summary: summarize(exercise_pool)
+  }

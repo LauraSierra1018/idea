@@ -1,0 +1,27 @@
+FUNCTION validate_plan(plan, Constraints c, Blueprint b) -> {ok, errors[]}:
+  errors = []
+
+  // structure checks
+  IF plan.sessions_per_week != b.sessions_per_week:
+    errors.append("sessions_per_week_mismatch")
+
+  // intensity checks
+  IF plan.max_rpe > c.hard.max_intensity_rpe:
+    errors.append("intensity_too_high")
+
+  // forbidden tags
+  FOR session IN plan.sessions:
+    FOR ex IN session.exercises:
+      IF intersects(ex.tags, c.hard.forbidden_exercise_tags):
+        errors.append("forbidden_exercise:" + ex.name)
+
+  // rest checks
+  IF plan.rest_days_per_week < c.hard.min_rest_days_per_week:
+    errors.append("insufficient_rest")
+
+  // time checks
+  FOR session IN plan.sessions:
+    IF session.estimated_minutes > b.session_duration_min + 10:
+      errors.append("session_too_long:" + session.id)
+
+  RETURN {ok: (len(errors)==0), errors: errors}

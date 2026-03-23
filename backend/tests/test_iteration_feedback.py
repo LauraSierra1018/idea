@@ -180,6 +180,35 @@ class IterationFeedbackTests(unittest.TestCase):
         self.assertEqual(kwargs["constraints"].soft.preferred_session_types[0], "cardio_zone2")
         self.assertIn("Solo 2 días", kwargs["iteration_feedback"])
 
+        updated_ctx = STORE.get_context("user-1")
+        self.assertEqual(updated_ctx.blueprint.sessions_per_week, 2)
+        self.assertEqual(updated_ctx.blueprint.session_duration_min, 25)
+
+    @patch("app.api.routes.plan.generate_plan_draft_with_repair")
+    def test_finalize_uses_persisted_iteration_context(self, mock_generate):
+        ctx = build_context()
+        STORE.set_context("user-2", ctx)
+        STORE.save_plan("plan-2", build_plan("plan-2", 1, 3, 30))
+        mock_generate.return_value = (build_plan("plan-2", 2, 2, 25), [])
+
+        client = TestClient(app)
+        iterate_response = client.post(
+            "/plan/plan-2/iterate",
+            params={"user_id": "user-2"},
+            json=IterateRequest(
+                user_message="Quiero 2 días y sesiones de 25 minutos"
+            ).model_dump(),
+        )
+        self.assertEqual(iterate_response.status_code, 200)
+
+        finalize_response = client.post(
+            "/plan/plan-2/finalize",
+            params={"user_id": "user-2"},
+            json={"confirm": True},
+        )
+        self.assertEqual(finalize_response.status_code, 200)
+        self.assertEqual(finalize_response.json()["plan"]["status"], "FINAL")
+
 
 if __name__ == "__main__":
     unittest.main()

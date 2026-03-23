@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.models import DraftResponse, IterateRequest, FinalizeRequest, PlanDraft
-from app.data.store import STORE  
+from app.data.store import STORE, PlanningContext
 from app.core.validator import validate_plan
 from app.core.policy_engine import apply_iteration_feedback
 from app.services.agent_service import generate_plan_draft_with_repair  
@@ -87,6 +87,15 @@ def iterate(user_id: str, plan_id: str, req: IterateRequest):
         raise HTTPException(status_code=400, detail={"message": "Iteration failed final validation", "errors": v_errors})
 
     STORE.save_plan(plan_id, plan)
+    STORE.set_context(
+        user_id,
+        PlanningContext(
+            user_profile=ctx.user_profile,
+            constraints=iter_constraints,
+            blueprint=iter_blueprint,
+            exercise_pool=iter_pool,
+        ),
+    )
     logger.info(
         "plan_iterated",
         extra={

@@ -1,9 +1,11 @@
 from fastapi import APIRouter
+import logging
 from app.schemas.models import UserProfileRaw, IntakeResponse
 from app.core.policy_engine import normalize_profile, derive_constraints, build_blueprint, filter_exercises
 from app.data.store import STORE, PlanningContext
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.post("/", response_model=IntakeResponse)
 def intake(user_id: str, body: UserProfileRaw):
@@ -11,6 +13,15 @@ def intake(user_id: str, body: UserProfileRaw):
     constraints = derive_constraints(normalized)
     blueprint = build_blueprint(normalized, constraints)
     pool = filter_exercises(normalized, constraints)
+    logger.info(
+        "intake_prepared",
+        extra={
+            "user_id": user_id,
+            "risk_level": normalized.risk_level,
+            "sessions_per_week": blueprint.sessions_per_week,
+            "exercise_pool_size": len(pool),
+        },
+    )
 
     STORE.set_context(
         user_id,

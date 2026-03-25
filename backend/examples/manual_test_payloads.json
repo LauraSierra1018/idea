@@ -1,0 +1,43 @@
+{
+  "intake_request": {
+    "age": 35,
+    "sex": "female",
+    "weight_kg": 65,
+    "height_cm": 168,
+    "activity_level_choice": "low",
+    "activity_history_text": "Retomando actividad física",
+    "injuries_text": "",
+    "medical_flags": [],
+    "time_per_session_min": 30,
+    "days_per_week_preferred": 3,
+    "equipment_available": [
+      "none"
+    ],
+    "goal_primary": "health"
+  },
+  "iterate_request": {
+    "user_message": "Quiero 2 días por semana, sesiones de 25 minutos y más cardio"
+  },
+  "finalize_request": {
+    "confirm": true
+  },
+  "intake_request_risk_example": {
+    "age": 46,
+    "sex": "male",
+    "weight_kg": 84,
+    "height_cm": 176,
+    "activity_level_choice": "sedentary",
+    "activity_history_text": "Mucho tiempo sin entrenar",
+    "injuries_text": "Molestia de rodilla",
+    "medical_flags": [
+      "hypertension"
+    ],
+    "time_per_session_min": 25,
+    "days_per_week_preferred": 4,
+    "equipment_available": [
+      "chair",
+      "none"
+    ],
+    "goal_primary": "health"
+  }
+}

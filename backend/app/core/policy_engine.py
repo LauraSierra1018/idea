@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import List
+import re
+from typing import List, Tuple
 from app.schemas.models import (
     UserProfileRaw, UserProfileNormalized,
     Constraints, ConstraintsHard, ConstraintsSoft,
@@ -185,3 +186,86 @@ def filter_exercises(n: UserProfileNormalized, c: Constraints) -> List[Exercise]
     if not pool:
         pool = [e for e in all_ex if "none" in e.equipment_tags]
     return pool
+
+
+def apply_iteration_feedback(
+    user_message: str,
+    constraints: Constraints,
+    blueprint: Blueprint,
+    exercise_pool: List[Exercise],
+) -> Tuple[Constraints, Blueprint, List[Exercise], List[str]]:
+    """
+    Applies a small set of deterministic updates based on user feedback so that
+    iteration requests can affect constraints/blueprint before the AI call.
+    """
+    message = (user_message or "").strip().lower()
+    if not message:
+        return constraints, blueprint, exercise_pool, []
+
+    hard = constraints.hard.model_copy(deep=True)
+    soft = constraints.soft.model_copy(deep=True)
+    updated_blueprint = blueprint.model_copy(deep=True)
+    updated_pool = list(exercise_pool)
+    notes: List[str] = []
+
+    minutes_match = re.search(r"(\d{2,3})\s*(min|mins|minutes|minutos)", message)
+    if minutes_match:
+        requested_minutes = max(10, min(120, int(minutes_match.group(1))))
+        if requested_minutes != updated_blueprint.session_duration_min:
+            updated_blueprint = updated_blueprint.model_copy(
+                update={"session_duration_min": requested_minutes}
+            )
+            notes.append(f"session_duration_min updated to {requested_minutes}")
+
+    days_match = re.search(r"(\d)\s*(day|days|días|dias)", message)
+    if days_match:
+        requested_days = max(1, min(hard.max_sessions_per_week, int(days_match.group(1))))
+        if requested_days != updated_blueprint.sessions_per_week:
+            hard = hard.model_copy(
+                update={"min_rest_days_per_week": max(2, 7 - requested_days)}
+            )
+            updated_blueprint = updated_blueprint.model_copy(
+                update={"sessions_per_week": requested_days}
+            )
+            notes.append(f"sessions_per_week updated to {requested_days}")
+
+    preference_keywords = {
+        "cardio": "cardio_zone2",
+        "movilidad": "mobility",
+        "mobility": "mobility",
+        "fuerza": "strength",
+        "strength": "strength",
+    }
+    preferred_updates = []
+    for keyword, preference in preference_keywords.items():
+        if keyword in message and preference not in preferred_updates:
+            preferred_updates.append(preference)
+    if preferred_updates:
+        remaining = [p for p in soft.preferred_session_types if p not in preferred_updates]
+        soft = soft.model_copy(update={"preferred_session_types": preferred_updates + remaining})
+        notes.append(f"preferred_session_types reordered to prioritize {preferred_updates}")
+
+    banned_name_keywords = {
+        "sentadilla": "sentadilla",
+        "squat": "sentadilla",
+        "caminata": "caminata",
+        "walk": "caminata",
+        "cadera": "cadera",
+        "hip": "cadera",
+    }
+    if any(token in message for token in ["sin ", "no ", "avoid", "evita", "evitar"]):
+        banned_terms = {
+            label for token, label in banned_name_keywords.items()
+            if token in message
+        }
+        if banned_terms:
+            filtered_pool = [
+                ex for ex in updated_pool
+                if not any(term in ex.name.lower() for term in banned_terms)
+            ]
+            if filtered_pool:
+                updated_pool = filtered_pool
+                notes.append(f"exercise_pool filtered to avoid {sorted(banned_terms)}")
+
+    updated_constraints = constraints.model_copy(update={"hard": hard, "soft": soft})
+    return updated_constraints, updated_blueprint, updated_pool, notes
